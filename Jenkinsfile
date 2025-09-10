@@ -115,7 +115,7 @@ pipeline {
 
     stage('Launch Odoo 18') {
       steps {
-        sh '''
+        sh """
       # Start the DB
       docker-compose up -d db
 
@@ -133,7 +133,7 @@ pipeline {
       PGPASSWORD=$DB_PASSWORD docker-compose exec -T db \
         psql -h db -U $DB_USER -d postgres \
         -c "CREATE DATABASE $DB_NAME;"
-    '''
+    """
       }
     }
 

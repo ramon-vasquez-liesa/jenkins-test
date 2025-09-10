@@ -1,5 +1,10 @@
 pipeline {
-  agent any
+  agent {
+    docker {
+      image 'docker:20.10.9'
+      args  '--network host -v /var/run/docker.sock:/var/run/docker.sock'
+    }
+  }
 
   tools {
     git 'Default'

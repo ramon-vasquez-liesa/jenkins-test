@@ -120,7 +120,7 @@ pipeline {
       docker-compose up -d db
 
       # Wait for readiness…
-      for i in $(seq 1 30); do
+      for i in \$(seq 1 30); do
         if docker-compose exec -T db pg_isready -h db -U $DB_USER >/dev/null; then break; fi
         echo "Waiting for Postgres ($i/30)…"
         sleep 2

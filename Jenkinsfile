@@ -120,19 +120,22 @@ pipeline {
       docker-compose up -d db
 
       # Wait for readiness…
-      for i in \$\(seq 1 30\); do
-        if docker-compose exec -T db pg_isready -h db -U $DB_USER >/dev/null; then break; fi
-        echo "Waiting for Postgres ($i/30)…"
+      for i in \$(seq 1 30); do
+        if docker-compose exec -T db pg_isready -h db -U ${DB_USER} >/dev/null; then
+          echo "Postgres is up!"
+          break
+        fi
+        echo "Waiting for Postgres (\$i/30)…"
         sleep 2
       done
 
-      # Drop & recreate using PGPASSWORD
-      PGPASSWORD=$DB_PASSWORD docker-compose exec -T db \
-        psql -h db -U $DB_USER -d postgres \
-        -c "DROP DATABASE IF EXISTS $DB_NAME;"
-      PGPASSWORD=$DB_PASSWORD docker-compose exec -T db \
-        psql -h db -U $DB_USER -d postgres \
-        -c "CREATE DATABASE $DB_NAME;"
+      # Drop & recreate the DB
+      PGPASSWORD=\"${DB_PASSWORD}\" docker-compose exec -T db \\
+        psql -h db -U ${DB_USER} -d postgres \\
+        -c \"DROP DATABASE IF EXISTS ${DB_NAME};\"
+      PGPASSWORD=\"${DB_PASSWORD}\" docker-compose exec -T db \\
+        psql -h db -U ${DB_USER} -d postgres \\
+        -c \"CREATE DATABASE ${DB_NAME};\"
     """
       }
     }

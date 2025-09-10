@@ -8,17 +8,13 @@ pipeline {
     }
   }
 
-  tools {
-    git 'Default'
-  }
+  tools { git 'Default' }
 
   environment {
-    // Repo details
     REPO_URL        = 'git@github.com:ramon-vasquez-liesa/doodba-v18.git'
     GIT_CREDENTIALS = 'doodba-v18-ssh'
     BRANCH          = 'main'
 
-    // Docker images & DB settings
     NETWORK_NAME    = 'doodba-net'
     POSTGRES_IMAGE  = 'postgres:16'
     ODOO_IMAGE      = 'odoo:18.0'
@@ -27,24 +23,16 @@ pipeline {
     DB_NAME         = 'devel'
     DB_PORT         = '5432'
 
-    // Unique container names per build
     DB_CONTAINER    = "odoo-db-${BUILD_ID}"
     ODOO_CONTAINER  = "odoo18-${BUILD_ID}"
-
-    // Fixed host port for Odoo
     HOST_PORT       = '8069'
   }
 
   stages {
     stage('Cleanup Previous Containers') {
       steps {
-        // Remove any stale DB or Odoo containers
         sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
-
-        // Free up HOST_PORT if any container is binding it
         sh 'docker ps -q --filter "publish=$HOST_PORT" | xargs -r docker rm -f || true'
-
-        // Tear down the network
         sh 'docker network rm $NETWORK_NAME || true'
       }
     }
@@ -56,7 +44,7 @@ pipeline {
             $class: 'GitSCM',
             branches: [[name: env.BRANCH]],
             userRemoteConfigs: [[
-              url: env.REPO_URL,
+              url:           env.REPO_URL,
               credentialsId: env.GIT_CREDENTIALS
             ]]
           ])
@@ -65,31 +53,28 @@ pipeline {
     }
 
     stage('Install Python Tools') {
-      agent {
-        docker {
-          image 'python:3.11-slim'
-          args  '-u root:root'
-        }
-      }
       steps {
-        sh '''
-          python3 -m venv .venv
-          . .venv/bin/activate
-          pip install --upgrade pip
-          pip install copier invoke pre-commit
-        '''
+        script {
+          docker.image('python:3.11-slim').inside(
+            '--network host ' +
+            '-v /var/run/docker.sock:/var/run/docker.sock ' +
+            '-u root:root'
+          ) {
+            sh '''
+              python3 -m venv .venv
+              . .venv/bin/activate
+              pip install --upgrade pip
+              pip install copier invoke pre-commit
+            '''
+          }
+        }
       }
     }
 
     stage('Start & Wait for PostgreSQL') {
       steps {
-        // Ensure the Docker network exists
         sh "docker network inspect $NETWORK_NAME >/dev/null 2>&1 || docker network create $NETWORK_NAME"
-
-        // Cleanup any old DB container
         sh 'docker rm -f $DB_CONTAINER || true'
-
-        // Launch fresh Postgres
         sh """
           docker run -d --rm \
             --name $DB_CONTAINER \
@@ -100,8 +85,6 @@ pipeline {
             -e POSTGRES_DB=$DB_NAME \
             $POSTGRES_IMAGE
         """
-
-        // Wait until Postgres is ready
         sh '''
           for i in $(seq 1 30); do
             if docker exec $DB_CONTAINER pg_isready -U $DB_USER -d $DB_NAME >/dev/null 2>&1; then
@@ -117,11 +100,8 @@ pipeline {
 
     stage('Launch Odoo 18') {
       steps {
-        // Ensure no old Odoo container or host-port binding remains
         sh 'docker rm -f $ODOO_CONTAINER || true'
         sh 'docker ps -q --filter "publish=$HOST_PORT" | xargs -r docker rm -f || true'
-
-        // Launch Odoo and bind host port 8069
         sh """
           docker run -d --rm \
             --name $ODOO_CONTAINER \
@@ -132,6 +112,23 @@ pipeline {
             -e PASSWORD=$DB_PASSWORD \
             $ODOO_IMAGE
         """
+      }
+    }
+
+    stage('Debug / Validate Odoo') {
+      steps {
+        sh '''
+          echo "=== Containers ==="
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+          echo
+          echo "=== Odoo Logs (last 20 lines) ==="
+          docker logs $ODOO_CONTAINER --tail 20 || true
+
+          echo
+          echo "=== Local Connectivity Test ==="
+          curl -I http://localhost:8069 || true
+        '''
       }
     }
 
@@ -153,7 +150,6 @@ pipeline {
 
   post {
     failure {
-      // Final cleanup
       sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
     }
   }

@@ -101,15 +101,19 @@ pipeline {
         sh 'docker rm -f $ODOO_CONTAINER || true'
         sh 'docker ps -q --filter "publish=$HOST_PORT" | xargs -r docker rm -f || true'
         sh """
-          docker run -d --rm \
-          --name $ODOO_CONTAINER \
-          --network $NETWORK_NAME \
-          -p 8069:8069 \
-          -e HOST=db \
-          -e USER=$DB_USER \
-          -e PASSWORD=$DB_PASSWORD \
-          $ODOO_IMAGE
-      """
+          docker-compose up -d db\
+          && echo 'drop database $DB_NAME' | docker-compose exec -u postgres -T db psql -U odoo -d postgres\
+          && echo 'create database $DB_NAME' | docker-compose exec -u postgres -T db psql -U odoo -d postgres
+      //   sh """
+      //     docker run -d --rm \
+      //     --name $ODOO_CONTAINER \
+      //     --network $NETWORK_NAME \
+      //     -p 8069:8069 \
+      //     -e HOST=db \
+      //     -e USER=$DB_USER \
+      //     -e PASSWORD=$DB_PASSWORD \
+      //     $ODOO_IMAGE
+      // """
       }
     }
 

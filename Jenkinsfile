@@ -2,7 +2,11 @@ pipeline {
   agent {
     docker {
       image 'docker/compose:1.29.2'
-      args '-v /var/run/docker.sock:/var/run/docker.sock -u root:root'
+      args '''
+        -v /var/run/docker.sock:/var/run/docker.sock
+        -u root:root
+        --entrypoint=""
+      '''.stripIndent()
     }
   }
 
@@ -27,6 +31,18 @@ pipeline {
   }
 
   stages {
+    stage('Prep Agent') {
+      steps {
+        // Install SSH client & ssh-agent
+        sh '''
+          if command -v apk >/dev/null; then
+            apk add --no-cache openssh-client
+          elif command -v apt-get >/dev/null; then
+            apt-get update && apt-get install -y openssh-client
+          fi
+        '''
+      }
+
     stage('Cleanup Previous Containers') {
       steps {
         sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
@@ -122,11 +138,11 @@ pipeline {
         """
       }
     }
-  }
+    }
 
   post {
     failure {
       sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
     }
   }
-}
+  }

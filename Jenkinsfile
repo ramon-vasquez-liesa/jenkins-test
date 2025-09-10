@@ -16,7 +16,6 @@ pipeline {
     REPO_URL        = 'git@github.com:ramon-vasquez-liesa/doodba-v18.git'
     GIT_CREDENTIALS = 'doodba-v18-ssh'
     BRANCH          = 'main'
-
     NETWORK_NAME    = 'doodba-net'
     POSTGRES_IMAGE  = 'postgres:16'
     ODOO_IMAGE      = 'odoo:18.0'
@@ -24,7 +23,6 @@ pipeline {
     DB_PASSWORD     = 'odoo'
     DB_NAME         = 'devel'
     DB_PORT         = '5432'
-
     DB_CONTAINER    = "odoo-db-${BUILD_ID}"
     ODOO_CONTAINER  = "odoo18-${BUILD_ID}"
     HOST_PORT       = '8069'
@@ -33,7 +31,6 @@ pipeline {
   stages {
     stage('Prep Agent') {
       steps {
-        // Install SSH client & ssh-agent
         sh '''
           if command -v apk >/dev/null; then
             apk add --no-cache openssh-client
@@ -59,7 +56,7 @@ pipeline {
             $class: 'GitSCM',
             branches: [[name: env.BRANCH]],
             userRemoteConfigs: [[
-              url:           env.REPO_URL,
+              url: env.REPO_URL,
               credentialsId: env.GIT_CREDENTIALS
             ]]
           ])
@@ -73,16 +70,14 @@ pipeline {
           docker.image('python:3.11-slim').inside(
             '--network host ' +
             '-v /var/run/docker.sock:/var/run/docker.sock ' +
-            '-u root:root'
-          ) {
-            sh '''
-              python3 -m venv .venv
-              . .venv/bin/activate
-              pip install --upgrade pip
-              pip install copier invoke pre-commit
-            '''
-          }
+            '-u root:root')
         }
+        sh '''
+          python3 -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install copier invoke pre-commit
+        '''
       }
     }
 
@@ -106,23 +101,18 @@ pipeline {
     stage('Launch Odoo 18') {
       steps {
         sh """
-      # Start the DB
-      docker-compose up -d db
-
-      # Wait for readiness…
-      for i in \$(seq 1 30); do
-        if docker-compose exec -T db pg_isready -h db -U ${DB_USER} >/dev/null; then
-          echo "Postgres is up!"
-          break
-        fi
-        echo "Waiting for Postgres (\$i/30)…"
-        sleep 2
-      done
-
-      # Drop & recreate the DB
-      echo \"DROP DATABASE IF EXISTS ${DB_NAME};\" | docker-compose exec -u postgres -T db psql -U odoo -d postgres\
-      && echo \"CREATE DATABASE ${DB_NAME};\" | docker-compose exec -u postgres -T db psql -U odoo -d postgres
-    """
+          docker-compose up -d db
+          for i in \$(seq 1 30); do
+            if docker-compose exec -T db pg_isready -h db -U ${DB_USER} >/dev/null; then
+              echo "Postgres is up!"
+              break
+            fi
+            echo "Waiting for Postgres (\$i/30)…"
+            sleep 2
+          done
+          echo \"DROP DATABASE IF EXISTS ${DB_NAME};\" | docker-compose exec -u postgres -T db psql -U odoo -d postgres\
+          && echo \"CREATE DATABASE ${DB_NAME};\" | docker-compose exec -u postgres -T db psql -U odoo -d postgres
+        """
       }
     }
 

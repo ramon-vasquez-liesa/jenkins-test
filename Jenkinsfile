@@ -117,6 +117,7 @@ pipeline {
       steps {
         sh 'docker rm -f $ODOO_CONTAINER || true'
         sh 'docker ps -q --filter "publish=$HOST_PORT" | xargs -r docker rm -f || true'
+        sh 'cd /var/jenkins_home/workspace/Pipeline'
         sh """
           docker-compose up -d db\
           && echo "drop database if exists $DB_NAME" | docker-compose exec -u postgres -T db psql -U odoo -d postgres\

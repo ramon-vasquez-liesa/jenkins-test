@@ -130,12 +130,8 @@ pipeline {
       done
 
       # Drop & recreate the DB
-      PGPASSWORD=\"${DB_PASSWORD}\" docker-compose exec -T db \\
-        psql -h db -U ${DB_USER} -d postgres \\
-        -c \"DROP DATABASE IF EXISTS ${DB_NAME};\"
-      PGPASSWORD=\"${DB_PASSWORD}\" docker-compose exec -T db \\
-        psql -h db -U ${DB_USER} -d postgres \\
-        -c \"CREATE DATABASE ${DB_NAME};\"
+      echo \"DROP DATABASE IF EXISTS ${DB_NAME};\" | docker-compose exec -u postgres -T db psql -U odoo -d postgres\
+      && echo \"CREATE DATABASE ${DB_NAME};\" | docker-compose exec -u postgres -T db psql -U odoo -d postgres
     """
       }
     }

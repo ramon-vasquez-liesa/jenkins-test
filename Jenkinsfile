@@ -8,7 +8,7 @@ pipeline {
   environment {
     // Repo details
     REPO_URL        = 'git@github.com:ramon-vasquez-liesa/doodba-v18.git'
-    GIT_CREDENTIALS = 'github-ssh'
+    GIT_CREDENTIALS = 'doodba-v18-ssh'
     BRANCH          = 'main'
 
     // Docker images & DB settings

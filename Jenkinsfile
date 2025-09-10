@@ -1,21 +1,153 @@
 pipeline {
-    agent any
+  agent any
 
-    stages {
-        stage('Build') {
-            steps {
-                echo 'Building..'
-            }
-        }
-        stage('Test') {
-            steps {
-                echo 'Testing..'
-            }
-        }
-        stage('Deploy') {
-            steps {
-                echo 'Deploying....'
-            }
-        }
+  tools {
+    git 'Default'
+  }
+
+  environment {
+    // Repo details
+    REPO_URL        = 'git@github.com:ramon-vasquez-liesa/doodba-v18.git'
+    GIT_CREDENTIALS = 'github-ssh'
+    BRANCH          = 'main'
+
+    // Docker images & DB settings
+    NETWORK_NAME    = 'doodba-net'
+    POSTGRES_IMAGE  = 'postgres:16'
+    ODOO_IMAGE      = 'odoo:18.0'
+    DB_USER         = 'odoo'
+    DB_PASSWORD     = 'odoo'
+    DB_NAME         = 'devel'
+    DB_PORT         = '5432'
+
+    // Unique container names per build
+    DB_CONTAINER    = "odoo-db-${BUILD_ID}"
+    ODOO_CONTAINER  = "odoo18-${BUILD_ID}"
+
+    // Fixed host port for Odoo
+    HOST_PORT       = '8069'
+  }
+
+  stages {
+    stage('Cleanup Previous Containers') {
+      steps {
+        // Remove any stale DB or Odoo containers
+        sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
+
+        // Free up HOST_PORT if any container is binding it
+        sh 'docker ps -q --filter "publish=$HOST_PORT" | xargs -r docker rm -f || true'
+
+        // Tear down the network
+        sh 'docker network rm $NETWORK_NAME || true'
+      }
     }
+
+    stage('Checkout') {
+      steps {
+        sshagent(credentials: [env.GIT_CREDENTIALS]) {
+          checkout([
+            $class: 'GitSCM',
+            branches: [[name: env.BRANCH]],
+            userRemoteConfigs: [[
+              url: env.REPO_URL,
+              credentialsId: env.GIT_CREDENTIALS
+            ]]
+          ])
+        }
+      }
+    }
+
+    stage('Install Python Tools') {
+      agent {
+        docker {
+          image 'python:3.11-slim'
+          args  '-u root:root'
+        }
+      }
+      steps {
+        sh '''
+          python3 -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install copier invoke pre-commit
+        '''
+      }
+    }
+
+    stage('Start & Wait for PostgreSQL') {
+      steps {
+        // Ensure the Docker network exists
+        sh "docker network inspect $NETWORK_NAME >/dev/null 2>&1 || docker network create $NETWORK_NAME"
+
+        // Cleanup any old DB container
+        sh 'docker rm -f $DB_CONTAINER || true'
+
+        // Launch fresh Postgres
+        sh """
+          docker run -d --rm \
+            --name $DB_CONTAINER \
+            --network $NETWORK_NAME \
+            --network-alias db \
+            -e POSTGRES_USER=$DB_USER \
+            -e POSTGRES_PASSWORD=$DB_PASSWORD \
+            -e POSTGRES_DB=$DB_NAME \
+            $POSTGRES_IMAGE
+        """
+
+        // Wait until Postgres is ready
+        sh '''
+          for i in $(seq 1 30); do
+            if docker exec $DB_CONTAINER pg_isready -U $DB_USER -d $DB_NAME >/dev/null 2>&1; then
+              echo "Postgres is up!"
+              break
+            fi
+            echo "Waiting for Postgres ($i/30)…"
+            sleep 2
+          done
+        '''
+      }
+    }
+
+    stage('Launch Odoo 18') {
+      steps {
+        // Ensure no old Odoo container or host-port binding remains
+        sh 'docker rm -f $ODOO_CONTAINER || true'
+        sh 'docker ps -q --filter "publish=$HOST_PORT" | xargs -r docker rm -f || true'
+
+        // Launch Odoo and bind host port 8069
+        sh """
+          docker run -d --rm \
+            --name $ODOO_CONTAINER \
+            --network $NETWORK_NAME \
+            -p $HOST_PORT:8069 \
+            -e HOST=db \
+            -e USER=$DB_USER \
+            -e PASSWORD=$DB_PASSWORD \
+            $ODOO_IMAGE
+        """
+      }
+    }
+
+    stage('Install Base Module') {
+      steps {
+        sh """
+          docker exec $ODOO_CONTAINER \
+            odoo --stop-after-init \
+                 --db_host=db \
+                 --db_port=$DB_PORT \
+                 --db_user=$DB_USER \
+                 --db_password=$DB_PASSWORD \
+                 -d $DB_NAME \
+                 -i base --without-demo=all
+        """
+      }
+    }
+  }
+
+  post {
+    failure {
+      // Final cleanup
+      sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
+    }
+  }
 }

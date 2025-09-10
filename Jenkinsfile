@@ -2,9 +2,7 @@ pipeline {
   agent {
     docker {
       image 'docker:20.10.9'
-      args  '--network host ' +
-            '-v /var/run/docker.sock:/var/run/docker.sock ' +
-            '-u root:root'
+      args '-v /var/run/docker.sock:/var/run/docker.sock -u root:root'
     }
   }
 
@@ -104,31 +102,14 @@ pipeline {
         sh 'docker ps -q --filter "publish=$HOST_PORT" | xargs -r docker rm -f || true'
         sh """
           docker run -d --rm \
-            --name $ODOO_CONTAINER \
-            --network $NETWORK_NAME \
-            -p $HOST_PORT:8069 \
-            -e HOST=db \
-            -e USER=$DB_USER \
-            -e PASSWORD=$DB_PASSWORD \
-            $ODOO_IMAGE
-        """
-      }
-    }
-
-    stage('Debug / Validate Odoo') {
-      steps {
-        sh '''
-          echo "=== Containers ==="
-          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-          echo
-          echo "=== Odoo Logs (last 20 lines) ==="
-          docker logs $ODOO_CONTAINER --tail 20 || true
-
-          echo
-          echo "=== Local Connectivity Test ==="
-          curl -I http://localhost:8069 || true
-        '''
+          --name $ODOO_CONTAINER \
+          --network $NETWORK_NAME \
+          -p 8069:8069 \
+          -e HOST=db \
+          -e USER=$DB_USER \
+          -e PASSWORD=$DB_PASSWORD \
+          $ODOO_IMAGE
+      """
       }
     }
 

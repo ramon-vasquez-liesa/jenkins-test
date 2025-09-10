@@ -42,6 +42,7 @@ pipeline {
           fi
         '''
       }
+    }
 
     stage('Cleanup Previous Containers') {
       steps {

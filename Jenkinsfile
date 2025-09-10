@@ -115,14 +115,24 @@ pipeline {
 
     stage('Launch Odoo 18') {
       steps {
-        sh 'docker rm -f $ODOO_CONTAINER || true'
-        sh 'docker ps -q --filter "publish=$HOST_PORT" | xargs -r docker rm -f || true'
-        sh 'cd /var/jenkins_home/workspace/Pipeline'
-        sh """
-          docker-compose up -d db\
-          && echo "drop database if exists $DB_NAME" | docker-compose exec -u postgres -T db psql -U odoo -d postgres\
-          && echo "create database $DB_NAME" | docker-compose exec -u postgres -T db psql -U odoo -d postgres
-      """
+        sh '''
+      # 1. Start only the db service
+      docker-compose up -d db
+
+      # 2. Wait up to 60s for Postgres to accept TCP connections
+      for i in $(seq 1 30); do
+        if docker-compose exec -T db pg_isready -h db -U $DB_USER >/dev/null 2>&1; then
+          echo "Postgres is up!"
+          break
+        fi
+        echo "Waiting for Postgres (${i}/30)…"
+        sleep 2
+      done
+
+      # 3. Drop & recreate the database over TCP
+      docker-compose exec -T db psql -h db -U $DB_USER -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME;"
+      docker-compose exec -T db psql -h db -U $DB_USER -d postgres -c "CREATE DATABASE $DB_NAME;"
+    '''
       }
     }
 
@@ -140,11 +150,11 @@ pipeline {
         """
       }
     }
-    }
+  }
 
   post {
     failure {
       sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
     }
   }
-  }
+}

@@ -116,22 +116,23 @@ pipeline {
     stage('Launch Odoo 18') {
       steps {
         sh '''
-      # 1. Start only the db service
+      # Start the DB
       docker-compose up -d db
 
-      # 2. Wait up to 60s for Postgres to accept TCP connections
+      # Wait for readiness…
       for i in $(seq 1 30); do
-        if docker-compose exec -T db pg_isready -h db -U $DB_USER >/dev/null 2>&1; then
-          echo "Postgres is up!"
-          break
-        fi
-        echo "Waiting for Postgres (${i}/30)…"
+        if docker-compose exec -T db pg_isready -h db -U $DB_USER >/dev/null; then break; fi
+        echo "Waiting for Postgres ($i/30)…"
         sleep 2
       done
 
-      # 3. Drop & recreate the database over TCP
-      docker-compose exec -T db psql -h db -U $DB_USER -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME;"
-      docker-compose exec -T db psql -h db -U $DB_USER -d postgres -c "CREATE DATABASE $DB_NAME;"
+      # Drop & recreate using PGPASSWORD
+      PGPASSWORD=$DB_PASSWORD docker-compose exec -T db \
+        psql -h db -U $DB_USER -d postgres \
+        -c "DROP DATABASE IF EXISTS $DB_NAME;"
+      PGPASSWORD=$DB_PASSWORD docker-compose exec -T db \
+        psql -h db -U $DB_USER -d postgres \
+        -c "CREATE DATABASE $DB_NAME;"
     '''
       }
     }

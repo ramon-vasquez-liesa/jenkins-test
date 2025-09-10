@@ -1,7 +1,7 @@
 pipeline {
   agent {
     docker {
-      image 'docker:20.10.9'
+      image 'docker/compose:1.29.2'
       args '-v /var/run/docker.sock:/var/run/docker.sock -u root:root'
     }
   }

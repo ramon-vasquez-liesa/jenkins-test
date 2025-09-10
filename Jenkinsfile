@@ -100,16 +100,6 @@ pipeline {
             -e POSTGRES_DB=$DB_NAME \
             $POSTGRES_IMAGE
         """
-        sh '''
-          for i in $(seq 1 30); do
-            if docker exec $DB_CONTAINER pg_isready -U $DB_USER -d $DB_NAME >/dev/null 2>&1; then
-              echo "Postgres is up!"
-              break
-            fi
-            echo "Waiting for Postgres ($i/30)…"
-            sleep 2
-          done
-        '''
       }
     }
 

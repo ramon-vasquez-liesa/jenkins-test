@@ -144,11 +144,11 @@ pipeline {
         """
       }
     }
+  }
 
-    post {
-      failure {
-        sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
-      }
+  post {
+    failure {
+      sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
     }
   }
 }

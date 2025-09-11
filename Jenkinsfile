@@ -13,9 +13,12 @@ pipeline {
   tools { git 'Default' }
 
   environment {
+    // Git
     REPO_URL        = 'git@github.com:ramon-vasquez-liesa/doodba-v18.git'
     GIT_CREDENTIALS = 'doodba-v18-ssh'
     BRANCH          = 'main'
+
+    // Docker & Odoo
     NETWORK_NAME    = 'doodba-net'
     POSTGRES_IMAGE  = 'postgres:16'
     ODOO_IMAGE      = 'odoo:18.0'
@@ -141,11 +144,11 @@ pipeline {
         """
       }
     }
-  }
 
-  post {
-    failure {
-      sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
+    post {
+      failure {
+        sh 'docker rm -f $DB_CONTAINER $ODOO_CONTAINER || true'
+      }
     }
   }
 }

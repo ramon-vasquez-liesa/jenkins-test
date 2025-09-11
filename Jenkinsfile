@@ -70,17 +70,19 @@ pipeline {
     stage('Install Python Tools') {
       steps {
         script {
-          docker.image('python:3.11-slim').inside(
-            '--network host ' +
-            '-v /var/run/docker.sock:/var/run/docker.sock ' +
-            '-u root:root')
+            docker.image('python:3.11-slim').inside(
+                '--network host ' +
+                '-v /var/run/docker.sock:/var/run/docker.sock ' +
+                '-u root:root'
+            ) {
+                sh '''
+                  python3 -m venv .venv
+                  . .venv/bin/activate
+                  pip install --upgrade pip
+                  pip install copier invoke pre-commit
+                '''
+            }
         }
-        sh '''
-          python3 -m venv .venv
-          . .venv/bin/activate
-          pip install --upgrade pip
-          pip install copier invoke pre-commit
-        '''
       }
     }
 
